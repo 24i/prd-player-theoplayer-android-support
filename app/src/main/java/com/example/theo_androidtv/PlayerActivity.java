@@ -8,10 +8,12 @@ import android.graphics.PorterDuff;
 import android.graphics.Typeface;
 import android.os.Bundle;
 import android.os.Handler;
+import android.text.TextUtils;
 import android.util.Log;
 import android.view.KeyEvent;
 import android.view.LayoutInflater;
 import android.view.View;
+import android.webkit.WebView;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.ListView;
@@ -26,6 +28,7 @@ import androidx.databinding.DataBindingUtil;
 import androidx.lifecycle.MutableLiveData;
 
 
+import com.theoplayer.android.api.event.ads.AdsEventTypes;
 import com.theoplayer.android.api.event.player.PlayerEventTypes;
 import com.theoplayer.android.api.event.track.mediatrack.video.list.VideoTrackListEventTypes;
 import com.theoplayer.android.api.event.track.texttrack.list.TextTrackListEventTypes;
@@ -38,6 +41,12 @@ import com.theoplayer.android.api.source.SourceDescription;
 import com.theoplayer.android.api.source.SourceType;
 import com.theoplayer.android.api.source.TypedSource;
 import com.example.theo_androidtv.databinding.ActivityMainBinding;
+import com.theoplayer.android.api.source.addescription.AdDescription;
+import com.theoplayer.android.api.source.addescription.GoogleImaAdDescription;
+import com.theoplayer.android.api.source.addescription.THEOplayerAdDescription;
+import com.theoplayer.android.api.source.drm.DRMConfiguration;
+import com.theoplayer.android.api.source.drm.KeySystemConfiguration;
+import com.theoplayer.android.api.source.drm.LicenseType;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -70,6 +79,7 @@ public class PlayerActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        WebView.setWebContentsDebuggingEnabled(BuildConfig.DEBUG);
         setContentView(R.layout.activity_main);
 
         viewBinding = DataBindingUtil.setContentView(this, R.layout.activity_main);
@@ -118,6 +128,7 @@ public class PlayerActivity extends Activity {
                 super.onAnimationEnd(animation);
                 if (!trickPlayVisible.getValue()) {
                     viewBinding.trickbar.setVisibility(View.GONE);
+                    focusTheoPlayerView();
                 }
             }
         });
@@ -129,6 +140,7 @@ public class PlayerActivity extends Activity {
                 viewBinding.trickbar.animate().translationY(0).alpha(1);
             } else {
                 viewBinding.trickbar.animate().translationY(64).alpha(0);
+                focusTheoPlayerView();
             }
         });
 
@@ -300,24 +312,68 @@ public class PlayerActivity extends Activity {
         timeout.postDelayed(r, INACTIVITY_SECONDS * 1000);
     }
 
+    private void focusTheoPlayerView() {
+        if (!focusAnything(viewBinding.theoPlayerView)) {
+            viewBinding.theoPlayerView.requestFocus();
+        }
+    }
+
+    private boolean focusAnything(View within) {
+        ArrayList<View> result = new ArrayList<>(24);
+        within.addFocusables(result, View.FOCUS_DOWN, View.FOCUSABLES_ALL);
+        within.addFocusables(result, View.FOCUS_UP, View.FOCUSABLES_ALL);
+        within.addFocusables(result, View.FOCUS_LEFT, View.FOCUSABLES_ALL);
+        within.addFocusables(result, View.FOCUS_RIGHT, View.FOCUSABLES_ALL);
+        if (result.isEmpty()) return false;
+        return result.get(0).requestFocus();
+    }
+
 
     private void configureTheoPlayer() {
-        // Creating a TypedSource builder that defines the location of a single stream source
-        // and has Widevine DRM parameters applied.
-        // TypedSource.Builder typedSource = typedSource(getString(R.string.defaultSourceUrl));
-        //   .drm(drmConfiguration.build());
-
-        TypedSource typedSource = TypedSource.Builder
+        TypedSource.Builder typedSource = TypedSource.Builder
                 .typedSource()
                 .src(getString(R.string.defaultSourceUrl))
-                .type(SourceType.DASH)
-                .build();
+                .type(SourceType.DASH);
+        if (getResources().getBoolean(R.bool.useNative)) {
+            typedSource
+                    .setNativeRenderingEnabled(true)
+                    .setNativeUiRenderingEnabled(true);
+        }
 
+        String defaultWidevineUrl = getString(R.string.defaultLicenseUrl);
+        if (!TextUtils.isEmpty(defaultWidevineUrl)) {
+            KeySystemConfiguration widevineConfig = KeySystemConfiguration.Builder
+                    .keySystemConfiguration(defaultWidevineUrl)
+                    .licenseType(LicenseType.TEMPORARY)
+                    .build();
+            typedSource.drm(DRMConfiguration.Builder
+                    .widevineDrm(widevineConfig)
+                    .build()
+            );
+        }
+
+        AdDescription adDescription = null;
+        String defaultAdTag = getString(R.string.defaultAdTag);
+        if (!TextUtils.isEmpty(defaultAdTag)) {
+            if (getResources().getBoolean(R.bool.useImaSdk)) {
+                adDescription = GoogleImaAdDescription.Builder
+                        .googleImaAdDescription(defaultAdTag)
+                        .build();
+            } else {
+                adDescription = THEOplayerAdDescription.Builder
+                        .adDescription(defaultAdTag)
+                        .build();
+            }
+        }
 
         // Creating a SourceDescription builder that contains the settings to be applied as a new
         // THEOplayer source.
-        SourceDescription.Builder sourceDescription = sourceDescription(typedSource)
+        SourceDescription.Builder sourceDescription = sourceDescription(typedSource.build())
                 .poster(getString(R.string.defaultPosterUrl));
+        if (adDescription != null) {
+            sourceDescription.ads(adDescription);
+        }
+
 
         //Setting the source to the player
         player.setSource(sourceDescription.build());
@@ -345,6 +401,7 @@ public class PlayerActivity extends Activity {
         // Adding listeners to THEOplayer content protection events.
         player.addEventListener(PlayerEventTypes.CONTENTPROTECTIONSUCCESS, event -> Log.i(TAG, "Event: CONTENT_PROTECTION_SUCCESS, mediaTrackType=" + event.getMediaTrackType()));
         player.addEventListener(PlayerEventTypes.CONTENTPROTECTIONERROR, event -> Log.i(TAG, "Event: CONTENT_PROTECTION_ERROR, error=" + event.getError()));
+        player.getAds().addEventListener(AdsEventTypes.AD_ERROR, event -> Log.w(TAG, "Event: AD_ERROR, error=" + event.getError()));
 
 
         //Adding the Video Quality tracks in the List
@@ -385,38 +442,38 @@ public class PlayerActivity extends Activity {
 
     }
 
-        @Override
-        public boolean dispatchKeyEvent(KeyEvent event) {
-            // When a key is hit, cancel the timeout of hiding the trick bar and set it again
-            timeout.removeCallbacks(r);
-            timeout.postDelayed(r, INACTIVITY_SECONDS * 1000);
-            trickPlayVisible.setValue(true);
-            super.dispatchKeyEvent(event);
-            return false;
-        }
+    @Override
+    public boolean dispatchKeyEvent(KeyEvent event) {
+        // When a key is hit, cancel the timeout of hiding the trick bar and set it again
+        timeout.removeCallbacks(r);
+        timeout.postDelayed(r, INACTIVITY_SECONDS * 1000);
+        trickPlayVisible.setValue(true);
+        super.dispatchKeyEvent(event);
+        return false;
+    }
 
 
-        // Overriding default events
-        @Override
-        protected void onPause() {
-            super.onPause();
-            viewBinding.theoPlayerView.onPause();
-        }
+    // Overriding default events
+    @Override
+    protected void onPause() {
+        super.onPause();
+        viewBinding.theoPlayerView.onPause();
+    }
 
-        @Override
-        protected void onResume() {
-            super.onResume();
-            viewBinding.theoPlayerView.onResume();
-        }
+    @Override
+    protected void onResume() {
+        super.onResume();
+        viewBinding.theoPlayerView.onResume();
+    }
 
-        @Override
-        protected void onDestroy() {
-            super.onDestroy();
-            viewBinding.theoPlayerView.onDestroy();
-        }
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        viewBinding.theoPlayerView.onDestroy();
+    }
 
-        // Make seconds look nice
-        public String formatTime(long secs) {
-            return String.format(getString(R.string.timeFormat), secs / 3600, (secs % 3600) / 60, secs % 60);
-        }
+    // Make seconds look nice
+    public String formatTime(long secs) {
+        return String.format(getString(R.string.timeFormat), secs / 3600, (secs % 3600) / 60, secs % 60);
+    }
 }

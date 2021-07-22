@@ -20,6 +20,7 @@
             android:screenOrientation="userLandscape"
             android:configChanges="orientation|screenSize"
             android:theme="@style/THEO.Base"
+            android:exported="true"
             >
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

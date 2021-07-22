@@ -14,6 +14,8 @@
             android:background="@color/THEOYellow"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
+            app:googleIma="@bool/useImaSdk"
+            app:adGoogleImaNative="@bool/useNative"
             app:chromeless="true">
 
         </com.theoplayer.android.api.THEOplayerView>
