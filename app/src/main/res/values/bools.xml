@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <bool name="useImaSdk">true</bool>
-    <bool name="useNative">false</bool>
+    <bool name="useNative">true</bool>
 </resources>

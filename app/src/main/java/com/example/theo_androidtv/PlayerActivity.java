@@ -128,7 +128,6 @@ public class PlayerActivity extends Activity {
                 super.onAnimationEnd(animation);
                 if (!trickPlayVisible.getValue()) {
                     viewBinding.trickbar.setVisibility(View.GONE);
-                    focusTheoPlayerView();
                 }
             }
         });
@@ -140,7 +139,6 @@ public class PlayerActivity extends Activity {
                 viewBinding.trickbar.animate().translationY(0).alpha(1);
             } else {
                 viewBinding.trickbar.animate().translationY(64).alpha(0);
-                focusTheoPlayerView();
             }
         });
 
@@ -311,23 +309,6 @@ public class PlayerActivity extends Activity {
         // In INACTIVITY_SECONDS seconds of inactivity hide the trickbar
         timeout.postDelayed(r, INACTIVITY_SECONDS * 1000);
     }
-
-    private void focusTheoPlayerView() {
-        if (!focusAnything(viewBinding.theoPlayerView)) {
-            viewBinding.theoPlayerView.requestFocus();
-        }
-    }
-
-    private boolean focusAnything(View within) {
-        ArrayList<View> result = new ArrayList<>(24);
-        within.addFocusables(result, View.FOCUS_DOWN, View.FOCUSABLES_ALL);
-        within.addFocusables(result, View.FOCUS_UP, View.FOCUSABLES_ALL);
-        within.addFocusables(result, View.FOCUS_LEFT, View.FOCUSABLES_ALL);
-        within.addFocusables(result, View.FOCUS_RIGHT, View.FOCUSABLES_ALL);
-        if (result.isEmpty()) return false;
-        return result.get(0).requestFocus();
-    }
-
 
     private void configureTheoPlayer() {
         TypedSource.Builder typedSource = TypedSource.Builder
